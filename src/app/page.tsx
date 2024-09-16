@@ -1,113 +1,437 @@
-import Image from 'next/image'
+"use client";
 
-export default function Home() {
+import React, { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow
+} from "@/components/ui/table";
+import MonthlyIncome from "@/components/MonthlyIncome";
+import HistoryRecaps from "@/components/HistoryRecaps";
+import ListTypes from "@/components/ListTypes";
+import AddingData from "@/components/AddingData";
+import { fetchAPI } from "@/lib/api";
+import { searchName } from "@/utils/searchName";
+import { searchPrice } from "@/utils/searchPrice";
+import { dateReadable } from "@/utils/dateReadable";
+import html2canvas from "html2canvas";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+
+// Define types for Recap and Type
+type Recap = {
+  id: number;
+  amount: number;
+  type: number;
+  date: string;
+  income: number;
+};
+
+type Type = {
+  id: number;
+  name: string;
+  price: number;
+};
+
+type GroupedRecaps = Record<number, Recap[]>;
+
+export default function Main() {
+  const [recaps, setRecaps] = useState<Recap[]>([]);
+  const [types, setTypes] = useState<Type[]>([]);
+  const [selectedYear, setSelectedYear] = useState<string>("");
+  const [selectedMonth, setSelectedMonth] = useState<string>("");
+  const [selectedTypes, setSelectedTypes] = useState<string>("*");
+  const [filteredRecaps, setFilteredRecaps] = useState<Recap[]>([]);
+  const [groupedByType, setGroupedByType] = useState<GroupedRecaps>({});
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [previousMonthIncome, setPreviousMonthIncome] = useState<number>(0);
+  const [isDownloading, setIsDownloading] = useState<boolean>(false);
+
+  useEffect(() => {
+    const fetchRecapsData = async () => {
+      try {
+        const recapsData = await fetchAPI<Recap[]>("recaps");
+        setRecaps(recapsData);
+      } catch (error) {
+        console.error("Error fetching recaps:", error);
+      }
+    };
+
+    const fetchTypesData = async () => {
+      try {
+        const typesData = await fetchAPI<Type[]>("types");
+        setTypes(typesData);
+      } catch (error) {
+        console.error("Error fetching types:", error);
+      }
+    };
+
+    const fetchData = async () => {
+      setIsLoading(true);
+      await Promise.all([fetchRecapsData(), fetchTypesData()]);
+      setIsLoading(false);
+    };
+
+    fetchData();
+  }, []);
+
+  useEffect(() => {
+    const currentDate = new Date();
+    setSelectedYear(currentDate.getFullYear().toString());
+    setSelectedMonth((currentDate.getMonth() + 1).toString());
+  }, []);
+
+  useEffect(() => {
+    const filterAndGroupData = () => {
+      const filteredData = filterByMonthAndYear(
+        recaps,
+        parseInt(selectedMonth),
+        parseInt(selectedYear)
+      );
+
+      const groupedData = groupByType(filteredData);
+      setGroupedByType(groupedData);
+
+      if (selectedTypes !== "*") {
+        const filteredByType = {
+          [selectedTypes]: groupedData[parseInt(selectedTypes)] || []
+        };
+        setGroupedByType(filteredByType);
+      } else {
+        setGroupedByType(groupedData);
+      }
+
+      setFilteredRecaps(filteredData);
+    };
+
+    if (recaps.length > 0 && types.length > 0) {
+      filterAndGroupData();
+    }
+  }, [selectedYear, selectedMonth, selectedTypes, recaps, types]);
+
+  useEffect(() => {
+    const selectedYearInt = parseInt(selectedYear);
+    const selectedMonthInt = parseInt(selectedMonth);
+
+    let previousMonth = selectedMonthInt - 1;
+    let previousYear = selectedYearInt;
+
+    if (previousMonth === 0) {
+      previousMonth = 12;
+      previousYear -= 1;
+    }
+
+    const filteredPreviousMonthData = filterByMonthAndYear(
+      recaps,
+      previousMonth,
+      previousYear
+    );
+
+    const totalPreviousMonthIncome = filteredPreviousMonthData.reduce(
+      (accumulator, currentValue) => accumulator + currentValue.income,
+      0
+    );
+
+    setPreviousMonthIncome(totalPreviousMonthIncome);
+  }, [selectedYear, selectedMonth, recaps]);
+
+  function groupByType(data: Recap[]): GroupedRecaps {
+    const grouped: GroupedRecaps = {};
+    data.forEach(item => {
+      const type = item.type;
+      if (!grouped[type]) {
+        grouped[type] = [];
+      }
+      grouped[type].push(item);
+    });
+    return grouped;
+  }
+
+  function filterByMonthAndYear(
+    data: Recap[],
+    month: number,
+    year: number
+  ): Recap[] {
+    return data.filter(item => {
+      const date = new Date(item.date);
+      return date.getUTCMonth() === month - 1 && date.getUTCFullYear() === year;
+    });
+  }
+
+  function getMonthName(monthNumber: number): string {
+    const date = new Date(Date.UTC(2000, monthNumber - 1, 1));
+    return date.toLocaleString("id-ID", { month: "long" });
+  }
+
+  const handleSelectTypes = (value: string) => {
+    setSelectedTypes(value);
+  };
+
+  const handleSelectYear = (value: string) => {
+    setSelectedYear(value);
+  };
+
+  const handleSelectMonth = (value: string) => {
+    setSelectedMonth(value);
+  };
+
+  const captureAllTables = () => {
+    setIsDownloading(true);
+
+    try {
+      const tables = document.querySelectorAll(".my-table");
+
+      tables.forEach((tableElement, index) => {
+        html2canvas(tableElement as HTMLElement)
+          .then(canvas => {
+            const imgData = canvas.toDataURL("image/png");
+
+            const link = document.createElement("a");
+            link.href = imgData;
+            link.download = `table-capture-${index + 1}.png`;
+
+            link.click();
+          })
+          .catch(error => {
+            console.error("Error capturing table:", error);
+          });
+      });
+    } catch (error) {
+      console.error("Error capturing tables:", error);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const getTotalIncomeCurrentMonth = (): number => {
+    // Assuming this function is meant to calculate the total income for the current month
+    return filteredRecaps.reduce(
+      (accumulator, currentValue) => accumulator + currentValue.income,
+      0
+    );
+  };
+
+  const formatDate = (inputDate: string): string => {
+    const date = new Date(inputDate);
+
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0"); // Months are 0-based
+    const year = date.getFullYear();
+
+    return `${day}/${month}/${year}`;
+  };
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">src/app/page.tsx</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{' '}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
+    <>
+      <main className="p-3.5 pb-14">
+        <h1 className="text-3xl font-bold tracking-wider mb-3">
+          Recapp{" "}
+          <span className="text-sm font-light tracking-tighter">v2.0.0</span>
+        </h1>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <MonthlyIncome
+            data={filteredRecaps}
+            previousIncome={previousMonthIncome}
+          />
+          <HistoryRecaps recaps={recaps} types={types} />
+          <ListTypes types={types} />
         </div>
-      </div>
-
-      <div className="relative flex place-items-center before:absolute before:h-[300px] before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 before:lg:h-[360px] z-[-1]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
-
-      <div className="mb-32 grid text-center lg:max-w-5xl lg:w-full lg:mb-0 lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Docs{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Learn{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Templates{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Explore the Next.js 13 playground.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Deploy{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
-    </main>
-  )
+        <Card>
+          <CardHeader>
+            <CardTitle>Recap Data Table</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Select value={selectedTypes} onValueChange={handleSelectTypes}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="*">All Types</SelectItem>
+                {types.map(type => (
+                  <SelectItem key={type.id} value={type.id.toString()}>
+                    {type.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="w-full flex gap-3 my-3">
+              <div className="w-1/2">
+                <Select value={selectedYear} onValueChange={handleSelectYear}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Years" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from(
+                      new Set(
+                        recaps
+                          .map(data => new Date(data.date).getFullYear())
+                          .sort((a, b) => a - b)
+                      )
+                    ).map(year => (
+                      <SelectItem key={year} value={year.toString()}>
+                        {year}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="w-1/2">
+                <Select value={selectedMonth} onValueChange={handleSelectMonth}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Months" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from(
+                      new Set(
+                        recaps
+                          .map(data => new Date(data.date).getMonth() + 1)
+                          .sort((a, b) => a - b)
+                      )
+                    ).map(month => (
+                      <SelectItem key={month} value={month.toString()}>
+                        {getMonthName(month)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {selectedTypes !== "*" &&
+              groupedByType[parseInt(selectedTypes)]?.length === 0 && (
+                <p className="mt-5 text-center tracking-wider">
+                  Data tidak ditemukan
+                </p>
+              )}
+            <div className="my-table">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {Object.keys(groupedByType).map(type => {
+                  const typeId = parseInt(type);
+                  if (selectedTypes === "*" || selectedTypes === type) {
+                    const filteredData = groupedByType[typeId];
+                    if (filteredData?.length > 0) {
+                      return (
+                        <Table key={type} className="overflow-hidden">
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead
+                                colSpan={3}
+                                className="text-center font-semibold tracking-wider bg-neutral-900 text-white"
+                              >
+                                {searchName(typeId, types)}
+                              </TableHead>
+                            </TableRow>
+                            <TableRow>
+                              <TableHead>Jumlah</TableHead>
+                              <TableHead>Tanggal</TableHead>
+                              <TableHead>Pendapatan</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {filteredData
+                              .sort(
+                                (a, b) =>
+                                  new Date(a.date).getTime() -
+                                  new Date(b.date).getTime()
+                              )
+                              .map(item => (
+                                <TableRow key={item.id}>
+                                  <TableCell>
+                                    {item.amount}
+                                    <span className="text-xs"> pcs</span>
+                                  </TableCell>
+                                  <TableCell>
+                                    {formatDate(item.date)}
+                                    {/* Date Format Must Be 14/09/2024 */}
+                                  </TableCell>
+                                  <TableCell>
+                                    {item.income.toLocaleString("id-ID", {
+                                      style: "currency",
+                                      currency: "IDR",
+                                      minimumFractionDigits: 0,
+                                      maximumFractionDigits: 0
+                                    })}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                          </TableBody>
+                          <TableFooter>
+                            <TableRow>
+                              <TableCell>Subtotal</TableCell>
+                              <TableCell>
+                                {filteredData.reduce(
+                                  (total, item) => total + item.amount,
+                                  0
+                                )}
+                                <span className="text-xs"> pcs</span> ×{" "}
+                                {searchPrice(typeId, types)}
+                              </TableCell>
+                              {/* Must Be Subtotal 1000 pcs × Rp 20 | Rp 20.000 */}
+                              <TableCell>
+                                {filteredData
+                                  .map(item => item.income)
+                                  .reduce(
+                                    (accumulator, currentValue) =>
+                                      accumulator + currentValue,
+                                    0
+                                  )
+                                  .toLocaleString("id-ID", {
+                                    style: "currency",
+                                    currency: "IDR",
+                                    minimumFractionDigits: 0,
+                                    maximumFractionDigits: 0
+                                  })}
+                              </TableCell>
+                            </TableRow>
+                          </TableFooter>
+                        </Table>
+                      );
+                    }
+                  }
+                  return null;
+                })}
+              </div>
+              <Table className="overflow-hidden">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead
+                      colSpan={3}
+                      className="w-full text-center font-semibold tracking-wider bg-neutral-900 text-white"
+                    >
+                      Total Pendapatan:{" "}
+                      {getTotalIncomeCurrentMonth().toLocaleString("id-ID", {
+                        style: "currency",
+                        currency: "IDR",
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0
+                      })}
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+              </Table>
+            </div>
+            <Button
+              className="w-full my-3"
+              onClick={captureAllTables}
+              disabled={isDownloading}
+            >
+              {isDownloading ? "Loading..." : "Download Table"}
+            </Button>
+          </CardContent>
+        </Card>
+      </main>
+      <AddingData types={types} />
+    </>
+  );
 }

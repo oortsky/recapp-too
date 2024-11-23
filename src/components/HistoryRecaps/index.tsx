@@ -32,7 +32,7 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { updateAPI, deleteAPI } from "@/lib/api";
+import { updateData, deleteData } from "@/lib/api";
 
 type Recap = {
   id: number;
@@ -86,7 +86,7 @@ export default function HistoryRecaps({ recaps, types }: Props) {
     };
 
     try {
-      const response = await updateAPI("recaps", id, data);
+      const response = await updateData("recaps", id, data);
       setAmount(undefined);
       setSelectedType(undefined);
       setSelectedDate(undefined);
@@ -99,7 +99,7 @@ export default function HistoryRecaps({ recaps, types }: Props) {
 
   const handleDelete = async (id: number) => {
     try {
-      const response = await deleteAPI("recaps", id);
+      const response = await deleteData("recaps", id);
       console.log("Data deleted:", response);
       window.location.reload();
     } catch (error) {

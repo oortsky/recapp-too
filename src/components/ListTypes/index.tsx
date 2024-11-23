@@ -12,7 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { updateAPI, deleteAPI } from "@/lib/api";
+import { updateData, deleteData } from "@/lib/api";
 
 type Type = {
   id: number;
@@ -42,7 +42,7 @@ export default function ListTypes({ types }: Props) {
     const data = { name, price };
 
     try {
-      const response = await updateAPI("types", id, data);
+      const response = await updateData("types", id, data);
       setName("");
       setPrice(undefined);
       console.log("Data updated:", response);
@@ -54,7 +54,7 @@ export default function ListTypes({ types }: Props) {
 
   const handleDelete = async (id: number) => {
     try {
-      const response = await deleteAPI("types", id);
+      const response = await deleteData("types", id);
       console.log("Data deleted:", response);
       window.location.reload();
     } catch (error) {

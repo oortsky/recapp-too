@@ -29,7 +29,7 @@ import { Calendar as CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
 import { searchIncome } from "@/utils/searchIncome";
-import { createAPI } from "@/lib/api";
+import { createData } from "@/lib/api";
 
 type Type = {
   id: number;
@@ -67,7 +67,7 @@ export default function AddingData({ types }: Props) {
     };
 
     try {
-      const response = await createAPI("recaps", data);
+      const response = await createData("recaps", data);
       setAmount(undefined);
       setSelectedType(undefined);
       setSelectedDate(undefined);
@@ -87,7 +87,7 @@ export default function AddingData({ types }: Props) {
     };
 
     try {
-      const response = await createAPI("types", data);
+      const response = await createData("types", data);
       setName("");
       setPrice(undefined);
       console.log("Data created:", response);
